@@ -1,0 +1,20 @@
+[project]
+name = "gtm-analytics"
+version = "0.1.0"
+description = "A GTM analytics data platform demonstrating reliable ingestion and analytics engineering."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.43.118",
+    "pydantic>=2.14.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.14,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
