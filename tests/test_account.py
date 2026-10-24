@@ -1,3 +1,13 @@
+"""Tests for the Account data contract.
+
+Coverage:
+- Timestamp normalization to naive UTC.
+- Required-field validation.
+- Rejection of unexpected fields.
+- Rejection of invalid or timezone-naive timestamps.
+- Rejection of empty or whitespace-only required strings.
+"""
+
 from datetime import datetime
 
 import pytest
@@ -49,6 +59,8 @@ def test_unexpected_field_is_rejected() -> None:
         "2026-10-23T14:00:00",
     ],
 )
+
+
 def test_invalid_or_timezone_naive_timestamp_is_rejected(
     timestamp: str,
 ) -> None:
@@ -62,6 +74,8 @@ def test_invalid_or_timezone_naive_timestamp_is_rejected(
     "field",
     ["account_id", "account_name", "industry"],
 )
+
+
 def test_empty_required_string_is_rejected(field: str) -> None:
     data = valid_account_data()
     data[field] = "   "

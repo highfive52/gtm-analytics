@@ -1,5 +1,5 @@
 
-.PHONY: config init up ps start verify down logs
+.PHONY: config init up ps start verify down logs test lint check
 
 # Validate the Compose configuration
 config:
@@ -30,3 +30,14 @@ down:
 # Follow service logs
 logs:
 	docker compose logs -f
+
+# Run the Python test suite
+test:
+	uv run pytest
+
+# Check code quality with Ruff
+lint:
+	uv run ruff check .
+
+# Run tests and lint checks
+check: test lint
