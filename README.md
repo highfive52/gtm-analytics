@@ -12,6 +12,7 @@ The platform currently provides:
 - **MinIO object storage** for published JSON Lines datasets and manifests.
 - **PostgreSQL ingestion** with batch identifiers and ingestion timestamps for data lineage.
 - **Batch audit and reconciliation** to track load status, record counts, and consistency between audit metadata and stored records.
+- **dbt snapshots** that preserve observed versions of the raw tables in a `src` schema.
 - **A local development environment** using Docker Compose, Airflow, PostgreSQL, and MinIO.
 
 The loader verifies published batches before inserting their records into PostgreSQL. It also checks completed batches before loading, allowing a verified completed batch to be rerun without inserting its records again.
@@ -43,12 +44,15 @@ make start
 make publish-baseline
 make analytics-db-migrate
 make load-dataset
+make dbt-build
 ```
 
 The `.env.example` values are local demo defaults; do not use them in production.
 These commands start the local services, generate, upload, and validate the
 `baseline_v2` synthetic batch in MinIO, apply Alembic migrations to create the
 analytics PostgreSQL schema, and load the batch records into PostgreSQL.
+The final command runs dbt snapshots against the loaded raw tables, builds the
+warehouse models, and runs their data tests.
 
 Published MinIO batch prefixes are immutable and are not overwritten. If
 `baseline_v2` has already been published, load that existing batch with
@@ -86,12 +90,14 @@ make down-volumes
 
 ## Architecture
 
-The current workflow separates dataset generation, raw storage, and relational ingestion:
+The current workflow separates dataset generation, raw storage, relational ingestion, and dbt snapshots:
 
 1. **Generate:** Create deterministic synthetic GTM datasets using defined business scenarios.
 2. **Validate and publish:** Validate the datasets, generate a manifest, and publish the JSON Lines files and manifest to MinIO.
 3. **Load:** Verify the published manifest and dataset contents, validate records against the data contracts, and load the data into PostgreSQL.
-4. **Audit and reconcile:** Record batch status and counts, and verify that the completed batch agrees with the stored records.
+4. **Snapshot:** Use dbt to preserve source versions observed at each snapshot run in the `src` schema.
+5. **Model:** Build dimensions and facts in the `wh` schema, then reporting marts in the `mart` schema.
+6. **Audit and reconcile:** Record batch status and counts, and verify that the completed batch agrees with the stored records.
 
 MinIO preserves the published batch as the source for ingestion, while PostgreSQL provides relational tables for downstream analytics. Batch identifiers and ingestion timestamps support lineage and reconciliation.
 
@@ -178,6 +184,65 @@ Each loaded record carries its source `batch_id` and `ingested_at_utc` timestamp
 For a completed batch, the loader verifies that the manifest, audit metadata, and database row counts agree. If they do, a rerun returns the existing counts without inserting the batch again. If the source manifest or stored data does not match the completed audit record, the loader raises an error rather than silently reloading the batch.
 
 The current loader is designed for the initial load into empty target tables, with safe reruns of a previously completed batch. It is not yet a general-purpose incremental loader for adding arbitrary new batches to populated tables.
+
+## Snapshot raw tables with dbt
+
+The dbt project is isolated under `dbt/`, keeping its project configuration,
+models, snapshots, and macros separate from the Python application and
+Alembic migrations.
+
+After the raw tables have been migrated and loaded, create or update their dbt
+snapshots with:
+
+```sh
+make dbt-snapshot
+```
+
+The dbt project reads `raw.accounts`, `raw.activities`, `raw.opportunities`,
+and `raw.opportunity_snapshots`, and creates the corresponding snapshot tables
+in the PostgreSQL `src` schema. Accounts and opportunities use their
+`updated_at_utc` columns with dbt's timestamp strategy. Activities and
+opportunity snapshots use the check strategy, comparing all selected source
+columns. Snapshot tables include dbt's validity metadata, including
+`dbt_valid_from` and `dbt_valid_to`.
+
+These are standard dbt snapshots: they record the source state observed when
+dbt runs. Run the snapshot command after loading or changing raw data. If a
+source row changes multiple times between dbt runs, dbt records the state it
+sees on the next run, not every intermediate state.
+
+## Build the `wh` and `mart` schemas
+
+After loading the raw batch, build the snapshots, `wh` tables, and data
+tests with:
+
+```sh
+make dbt-build
+```
+
+The dbt project builds both schemas:
+
+| Schema | Table | Grain / purpose |
+|---|---|---|
+| `wh` | `dim_date` | One row per calendar date used by the source data |
+| `wh` | `dim_account` | SCD2 account versions with effective date boundaries |
+| `wh` | `dim_opportunity` | Current opportunity attributes; stage history remains in the fact |
+| `wh` | `fact_activity` | One row per activity event |
+| `wh` | `fact_opportunity_snapshot` | One row per opportunity and weekly snapshot date |
+| `mart` | `account_weekly_usage` | Account activity counts by week, including zero-activity weeks |
+| `mart` | `account_follow_up_priority` | Account-opportunity usage trends, stage age, flags, and reasons |
+
+The `mart` models are separate from the `wh` dimensions and facts, but remain
+in the same dbt project so their `ref()` dependencies are managed together.
+The primary follow-up mart compares average activity in the latest four
+complete weeks with the preceding four complete weeks. It flags an account and
+opportunity when usage increased and the opportunity is open and has remained
+in its current stage for at least 30 days. Stage age comes from the weekly
+opportunity history, not `updated_at_utc`; because the history is weekly, stage
+age is approximate to that snapshot interval. The activity windows are anchored
+to the latest complete week in the loaded data, making the result reproducible
+for historical batches. The mart includes the component metrics and a reason
+so dashboard users can inspect why a record was flagged.
 
 ## Python development
 

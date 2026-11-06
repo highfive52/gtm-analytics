@@ -1,4 +1,4 @@
-.PHONY: config init up ps start verify down logs test lint lint-fix check fix publish-baseline load-dataset analytics-db analytics-db-check analytics-db-migrate analytics-db-update analytics-db-apply analytics-db-require-message
+.PHONY: config init up ps start verify down logs test lint lint-fix check fix publish-baseline load-dataset dbt-debug dbt-snapshot dbt-build analytics-db analytics-db-check analytics-db-migrate analytics-db-update analytics-db-apply analytics-db-require-message
 
 # Validate the Compose configuration
 config:
@@ -97,3 +97,18 @@ load-dataset:
 	MINIO_SECURE=false \
 	uv run python -m gtm_analytics.storage.dataset_loader \
 		--batch-id $(BATCH_ID)
+
+# Check dbt's PostgreSQL connection
+dbt-debug: analytics-db analytics-db-check
+	set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
+	uv run dbt debug --project-dir dbt --profiles-dir dbt
+
+# Snapshot raw source tables into the src schema
+dbt-snapshot: analytics-db-migrate
+	set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
+	uv run dbt snapshot --project-dir dbt --profiles-dir dbt
+
+# Build dbt snapshots, wh models, mart models, and data tests
+dbt-build: analytics-db-migrate
+	set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
+	uv run dbt build --project-dir dbt --profiles-dir dbt

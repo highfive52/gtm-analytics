@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: account_weekly_usage
+    description: Account activity counts at one row per account and week.
+    columns:
+      - name: account_id
+        data_tests:
+          - not_null
+      - name: week_start_date
+        data_tests:
+          - not_null
+      - name: activity_count
+        data_tests:
+          - not_null
+
+  - name: account_follow_up_priority
+    description: Explainable account-opportunity follow-up signals for reporting.
+    columns:
+      - name: account_id
+        data_tests:
+          - not_null
+      - name: is_primary_follow_up
+        data_tests:
+          - not_null
+      - name: follow_up_reason
+        data_tests:
+          - not_null

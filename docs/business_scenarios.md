@@ -139,6 +139,13 @@ The synthetic dataset should follow these principles:
 5. Validate record-level rules and cross-record relationships.
 6. Confirm that the generated dataset exhibits all six scenarios.
 7. Prepare the source data for MinIO storage and Postgres ingestion.
-8. Build dbt models that identify and explain the primary signal.
+8. Build dbt models in three layers: SCD2 snapshots in `src`, account and
+   opportunity dimensions plus activity and opportunity-snapshot facts in
+   `wh`, and account-week and follow-up-priority reporting marts in `mart`.
+   The primary signal compares average activity in the latest four complete
+   weeks with the preceding four complete weeks and flags open opportunities
+   that have remained in the same stage for at least 30 days. Keep the
+   component metrics and reason visible so the result is explainable in
+   reports.
 
 The objective is not simply to generate realistic-looking data. It is to create a reproducible dataset that can demonstrate the complete path from source records to trustworthy, actionable GTM analytics.

@@ -1,0 +1,13 @@
+gtm_analytics:
+  target: local
+  outputs:
+    local:
+      type: postgres
+      host: "{{ env_var('ANALYTICS_POSTGRES_HOST', 'localhost') }}"
+      user: "{{ env_var('ANALYTICS_POSTGRES_USER', 'analytics') }}"
+      password: "{{ env_var('ANALYTICS_POSTGRES_PASSWORD', 'analytics_dev') }}"
+      port: "{{ env_var('ANALYTICS_POSTGRES_PORT', '5433') | int }}"
+      dbname: "{{ env_var('ANALYTICS_POSTGRES_DB', 'analytics') }}"
+      schema: public
+      threads: 4
+      sslmode: prefer

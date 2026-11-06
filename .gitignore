@@ -42,6 +42,12 @@ dist/
 *.egg-info/
 .eggs/
 
+# dbt artifacts
+target/
+dbt_packages/
+logs/
+.user.yml
+
 # Jupyter
 .ipynb_checkpoints/
 

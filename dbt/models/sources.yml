@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: Validated source records loaded from MinIO into PostgreSQL.
+    tables:
+      - name: accounts
+      - name: activities
+      - name: opportunities
+      - name: opportunity_snapshots
