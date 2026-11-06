@@ -15,10 +15,10 @@ class Account(BaseModel):
     account_name: str = Field(min_length=1)
     industry: str = Field(min_length=1)
 
-    created_at: datetime
-    updated_at: datetime
+    created_at_utc: datetime
+    updated_at_utc: datetime
 
-    @field_validator("created_at", "updated_at")
+    @field_validator("created_at_utc", "updated_at_utc")
     @classmethod
     def normalize_timestamp_to_naive_utc(
         cls,

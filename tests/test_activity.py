@@ -25,7 +25,7 @@ def valid_activity_data() -> dict:
         "activity_id": "act-001",
         "account_id": "acct-001",
         "event_name": "feature_used",
-        "activity_timestamp": "2026-10-23T10:00:00-04:00",
+        "activity_timestamp_utc": "2026-10-23T10:00:00-04:00",
         "source": "product_analytics",
         "properties": {
             "feature_name": "campaign_builder",
@@ -37,8 +37,8 @@ def valid_activity_data() -> dict:
 def test_valid_activity_normalizes_timestamp_to_naive_utc() -> None:
     activity = Activity.model_validate(valid_activity_data())
 
-    assert activity.activity_timestamp == datetime(2026, 10, 23, 14, 0, 0)
-    assert activity.activity_timestamp.tzinfo is None
+    assert activity.activity_timestamp_utc == datetime(2026, 10, 23, 14, 0, 0)
+    assert activity.activity_timestamp_utc.tzinfo is None
 
 
 def test_missing_required_field_is_rejected() -> None:
@@ -76,7 +76,7 @@ def test_invalid_or_timezone_naive_timestamp_is_rejected(
     timestamp: str,
 ) -> None:
     data = valid_activity_data()
-    data["activity_timestamp"] = timestamp
+    data["activity_timestamp_utc"] = timestamp
 
     with pytest.raises(ValidationError):
         Activity.model_validate(data)
@@ -172,6 +172,7 @@ def test_meeting_can_have_empty_properties() -> None:
     activity = Activity.model_validate(data)
 
     assert activity.properties == {}
+
 
 def test_feature_used_requires_action() -> None:
     data = valid_activity_data()

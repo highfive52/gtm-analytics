@@ -1,0 +1,162 @@
+Generic single-database configuration.# Alembic Database Migrations
+
+This directory contains Alembic configuration and database migration scripts for the GTM Analytics PostgreSQL schema.
+
+Alembic manages schema changes over time, such as creating tables, adding columns, changing constraints, and creating indexes. Migrations provide a version-controlled, repeatable way to evolve the database schema across development environments.
+
+## How migrations fit into the project
+
+The project separates database schema management from data ingestion and analytics transformations:
+
+- **Alembic** manages PostgreSQL schema changes.
+- **The Python ingestion pipeline** validates published datasets and loads records into PostgreSQL.
+- **MinIO** stores published synthetic data batches and their manifests.
+- **dbt** will manage downstream SQL transformations and reporting models.
+
+Use Alembic for changes to database structure, not for loading synthetic batches or implementing analytics queries.
+
+## Directory structure
+
+A typical Alembic setup includes:
+
+```text
+alembic/
+├── README.md
+├── env.py
+├── script.py.mako
+└── versions/
+    └── <revision>_<description>.py
+```
+
+- `env.py` configures how Alembic connects to the database and runs migrations.
+- `script.py.mako` is the template used to generate new migration scripts.
+- `versions/` contains the versioned migration scripts.
+- `alembic.ini`, usually located at the repository root, provides Alembic configuration.
+
+The exact files and configuration in this repository are authoritative.
+
+## Prerequisites
+
+From the repository root:
+
+```sh
+uv sync --dev
+```
+
+Ensure PostgreSQL is running and the database connection settings are configured for the intended environment. Do not commit credentials or place production secrets in migration files.
+
+## Common commands
+
+Run Alembic commands through the project's Python environment using `uv run`.
+
+### Check the current database revision
+
+```sh
+uv run alembic current
+```
+
+### View migration history
+
+```sh
+uv run alembic history
+```
+
+### Generate a migration
+
+After updating the SQLAlchemy models, generate a candidate migration:
+
+```sh
+uv run alembic revision --autogenerate -m "describe schema change"
+```
+
+Autogeneration compares the SQLAlchemy metadata with the connected database schema. It produces a proposed migration, not a guaranteed complete migration. Review the generated file before applying it.
+
+### Apply migrations
+
+```sh
+uv run alembic upgrade head
+```
+
+This applies migrations up to the latest revision.
+
+## Quick run: model change to database
+
+From the repository root, make sure the analytics PostgreSQL service is
+running and `.env` contains its connection settings. For example, start the
+database with:
+
+```sh
+docker compose up -d analytics-postgres
+```
+
+After changing the SQLAlchemy models:
+
+1. Apply any existing migrations so the database is at the current revision:
+
+   ```sh
+   uv run alembic upgrade head
+   uv run alembic current
+   ```
+
+2. Generate a candidate migration:
+
+   ```sh
+   uv run alembic revision --autogenerate -m "add account segment"
+   ```
+
+   This creates a migration file but does not apply it.
+
+3. Review the generated file in `alembic/versions/`, especially the
+   `upgrade()` and `downgrade()` operations. Autogeneration is a proposal;
+   check carefully for renames, schema moves, and data changes.
+
+4. Preview the pending SQL without executing it:
+
+   ```sh
+   uv run alembic upgrade 72d820995123:head --sql
+   ```
+
+   `72d820995123` is the current revision when this example was written.
+   Replace it with the revision reported by `uv run alembic current` if the
+   database is at a different revision. The `--sql` command prints SQL; it
+   does not modify the database.
+
+5. After reviewing the migration and SQL, apply it and verify the revision:
+
+   ```sh
+   uv run alembic upgrade head
+   uv run alembic current
+   ```
+
+### Roll back one revision
+
+```sh
+uv run alembic downgrade -1
+```
+
+Review the migration before downgrading. Some schema or data changes cannot be safely reversed, and downgrading a shared or production database requires particular care.
+
+## Migration workflow
+
+For a schema change:
+
+1. Update the relevant SQLAlchemy model definitions.
+2. Generate a migration with `--autogenerate`, or create a migration manually.
+3. Review the generated `upgrade()` and `downgrade()` functions.
+4. Confirm the migration handles existing data and constraints safely.
+5. Apply the migration to a development database.
+6. Run the relevant tests and verify the resulting schema.
+7. Commit the model changes and migration together.
+
+Keep migrations small and focused. When adding a non-nullable column to a populated table, consider a staged migration: add the column as nullable, populate existing rows, then enforce the non-null constraint.
+
+## Important considerations
+
+- **Schema changes are not data loads.** Use the ingestion pipeline to publish and load data batches.
+- **Review autogenerated migrations.** Alembic cannot reliably infer every intended schema change, data migration, or rename.
+- **Protect existing data.** Avoid destructive operations unless explicitly intended and reviewed.
+- **Keep migration history in version control.** Do not edit migrations that have already been applied in shared environments; create a new revision instead.
+- **Coordinate schema and model changes.** SQLAlchemy models, Alembic migrations, ingestion code, and downstream dbt models should agree on table and column definitions.
+- **Use the intended database.** Verify the configured connection before running upgrade or downgrade commands.
+
+For further details, see the [Alembic documentation](https://alembic.sqlalchemy.org/en/latest/).

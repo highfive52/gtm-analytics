@@ -74,12 +74,12 @@ class Activity(BaseModel):
         "email",
     ]
 
-    activity_timestamp: datetime
+    activity_timestamp_utc: datetime
     source: str = Field(min_length=1)
 
     properties: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("activity_timestamp")
+    @field_validator("activity_timestamp_utc")
     @classmethod
     def normalize_timestamp_to_naive_utc(
         cls,
@@ -103,9 +103,7 @@ class Activity(BaseModel):
         properties_model = property_models.get(self.event_name)
 
         if properties_model is not None:
-            validated_properties = properties_model.model_validate(
-                self.properties
-            )
+            validated_properties = properties_model.model_validate(self.properties)
             self.properties = validated_properties.model_dump()
 
         return self

@@ -21,19 +21,19 @@ def valid_account_data() -> dict:
         "account_id": "acct-001",
         "account_name": "Example Corp",
         "industry": "Technology",
-        "created_at": "2026-10-23T10:00:00-04:00",
-        "updated_at": "2026-10-23T14:30:00Z",
+        "created_at_utc": "2026-10-23T10:00:00-04:00",
+        "updated_at_utc": "2026-10-23T14:30:00Z",
     }
 
 
 def test_valid_account_normalizes_timestamps_to_naive_utc() -> None:
     account = Account.model_validate(valid_account_data())
 
-    assert account.created_at == datetime(2026, 10, 23, 14, 0, 0)
-    assert account.updated_at == datetime(2026, 10, 23, 14, 30, 0)
+    assert account.created_at_utc == datetime(2026, 10, 23, 14, 0, 0)
+    assert account.updated_at_utc == datetime(2026, 10, 23, 14, 30, 0)
 
-    assert account.created_at.tzinfo is None
-    assert account.updated_at.tzinfo is None
+    assert account.created_at_utc.tzinfo is None
+    assert account.updated_at_utc.tzinfo is None
 
 
 def test_missing_required_field_is_rejected() -> None:
@@ -59,23 +59,20 @@ def test_unexpected_field_is_rejected() -> None:
         "2026-10-23T14:00:00",
     ],
 )
-
-
 def test_invalid_or_timezone_naive_timestamp_is_rejected(
     timestamp: str,
 ) -> None:
     data = valid_account_data()
-    data["created_at"] = timestamp
+    data["created_at_utc"] = timestamp
 
     with pytest.raises(ValidationError):
         Account.model_validate(data)
+
 
 @pytest.mark.parametrize(
     "field",
     ["account_id", "account_name", "industry"],
 )
-
-
 def test_empty_required_string_is_rejected(field: str) -> None:
     data = valid_account_data()
     data[field] = "   "

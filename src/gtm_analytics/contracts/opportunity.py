@@ -28,20 +28,17 @@ class Opportunity(BaseModel):
     ]
 
     amount: Decimal = Field(ge=0)
-    created_at: datetime
-    updated_at: datetime
+    created_at_utc: datetime
+    updated_at_utc: datetime
     close_date: date | None = None
 
-    @field_validator("created_at", "updated_at")
+    @field_validator("created_at_utc", "updated_at_utc")
     @classmethod
     def normalize_timestamp_to_naive_utc(
         cls,
-        value: datetime | None,
-    ) -> datetime | None:
+        value: datetime,
+    ) -> datetime:
         """Require timezone-aware input and normalize it to naive UTC."""
-        if value is None:
-            return None
-
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Timestamp must include timezone information")
 

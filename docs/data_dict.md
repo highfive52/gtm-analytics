@@ -5,7 +5,8 @@ This document defines the fields, meanings, and data-contract conventions used b
 ## Conventions
 
 - **Identifiers:** IDs identify records in their source or application context.
-- **Timestamps:** Timestamp inputs must include timezone information. Accepted timestamps are converted to UTC and stored as timezone-naive Python `datetime` values. Calendar-date fields, such as `Opportunity.close_date`, are represented as Python `date` values and are not timezone-converted.
+- **Timestamps:** Timestamp inputs must include timezone information. Accepted timestamps are converted to UTC and stored as timezone-naive Python `datetime` values. Canonical UTC datetime fields use the `_utc` suffix. The timezone-naive representation means UTC by contract; it does not imply local time.
+- **Date-only fields:** Calendar-date fields, such as `Opportunity.close_date` and `OpportunitySnapshot.snapshot_date`, are represented as Python `date` values and are not timezone-converted. They do not use the `_utc` suffix.
 - **Validation:** Pydantic enforces field-level rules in the application contracts. Cross-record and dataset-level integrity checks are handled separately.
 - **String fields:** Required string fields must be nonempty. Surrounding whitespace is stripped before validation.
 - **Additional fields:** The Account, Opportunity, and Activity contracts reject unexpected top-level fields.
@@ -17,8 +18,8 @@ This document defines the fields, meanings, and data-contract conventions used b
 | `account_id` | Stable source-system identifier | Required, nonempty string |
 | `account_name` | Company name | Required, nonempty string; surrounding whitespace is stripped |
 | `industry` | Industry classification | Required, nonempty string; surrounding whitespace is stripped |
-| `created_at` | Account creation timestamp | Required; timezone-aware input, normalized to naive UTC |
-| `updated_at` | Most recent source update timestamp | Required; timezone-aware input, normalized to naive UTC |
+| `created_at_utc` | Account creation timestamp | Required; timezone-aware input, normalized to naive UTC |
+| `updated_at_utc` | Most recent source update timestamp | Required; timezone-aware input, normalized to naive UTC |
 
 ## Opportunity
 
@@ -29,8 +30,8 @@ This document defines the fields, meanings, and data-contract conventions used b
 | `opportunity_name` | Human-readable name | Required, nonempty string; surrounding whitespace is stripped |
 | `stage` | Current sales stage | Required; must match an allowed value listed below |
 | `amount` | Monetary amount associated with the opportunity | Required `Decimal`; must be greater than or equal to zero |
-| `created_at` | Record creation timestamp | Required; timezone-aware input, normalized to naive UTC |
-| `updated_at` | Most recent record update timestamp | Required; timezone-aware input, normalized to naive UTC |
+| `created_at_utc` | Record creation timestamp | Required; timezone-aware input, normalized to naive UTC |
+| `updated_at_utc` | Most recent record update timestamp | Required; timezone-aware input, normalized to naive UTC |
 | `close_date` | Expected opportunity close date | Optional; may be omitted or `None`; otherwise, a calendar date represented as `YYYY-MM-DD`, with no timezone conversion |
 
 ### Opportunity stages
@@ -52,6 +53,24 @@ The `stage` field accepts only these values:
 - Pydantic validates that `account_id` is a nonempty string, but does not establish referential integrity. A separate pipeline or data-quality test must verify that the referenced account exists.
 - `close_date` is a calendar date, not a timestamp. It represents the expected close date and is not subject to UTC normalization.
 
+## OpportunitySnapshot
+
+Each `OpportunitySnapshot` record represents an opportunity's state on a particular snapshot date.
+
+| Field | Purpose | Rules / Representation |
+|---|---|---|
+| `opportunity_id` | Identifies the opportunity being snapshotted | Required, nonempty string |
+| `account_id` | Links the snapshot to an account | Required, nonempty string |
+| `snapshot_date` | Date the opportunity state was recorded | Required calendar date; no timezone conversion |
+| `stage` | Opportunity stage on the snapshot date | Required; must match the allowed opportunity-stage vocabulary |
+| `amount` | Opportunity amount on the snapshot date | Required `Decimal`; must be greater than or equal to zero |
+
+### OpportunitySnapshot validation notes
+
+- `snapshot_date` is a calendar date, not a timestamp, so it does not use the `_utc` suffix.
+- The Pydantic model enforces field-level constraints but does not establish that the referenced opportunity or account exists.
+- Dataset-level validation checks snapshot relationships, duplicate opportunity/date combinations, snapshot counts, and weekly spacing.
+
 ## Activity
 
 Each Activity record represents one event associated with an account.
@@ -61,7 +80,7 @@ Each Activity record represents one event associated with an account.
 | `activity_id` | Identifies the activity event | Required, nonempty string |
 | `account_id` | Links the activity to an account | Required, nonempty string; account existence is not verified by the Pydantic model |
 | `event_name` | Identifies the specific activity event | Required; must match an allowed value listed below |
-| `activity_timestamp` | Time the activity occurred | Required; timezone-aware input, normalized to naive UTC |
+| `activity_timestamp_utc` | Time the activity occurred | Required; timezone-aware input, normalized to naive UTC |
 | `source` | Identifies the originating system | Required, nonempty string |
 | `properties` | Holds attributes specific to an activity | Optional; defaults to an empty dictionary |
 

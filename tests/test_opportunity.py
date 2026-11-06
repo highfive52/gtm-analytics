@@ -29,8 +29,8 @@ def valid_opportunity_data() -> dict:
         "opportunity_name": "Enterprise Expansion",
         "stage": "evaluation",
         "amount": "25000.00",
-        "created_at": "2026-10-23T10:00:00-04:00",
-        "updated_at": "2026-10-23T14:30:00Z",
+        "created_at_utc": "2026-10-23T10:00:00-04:00",
+        "updated_at_utc": "2026-10-23T14:30:00Z",
         "close_date": "2026-12-15",
     }
 
@@ -38,12 +38,12 @@ def valid_opportunity_data() -> dict:
 def test_valid_opportunity_normalizes_timestamps_to_naive_utc() -> None:
     opportunity = Opportunity.model_validate(valid_opportunity_data())
 
-    assert opportunity.created_at == datetime(2026, 10, 23, 14, 0, 0)
-    assert opportunity.updated_at == datetime(2026, 10, 23, 14, 30, 0)
+    assert opportunity.created_at_utc == datetime(2026, 10, 23, 14, 0, 0)
+    assert opportunity.updated_at_utc == datetime(2026, 10, 23, 14, 30, 0)
     assert opportunity.close_date == date(2026, 12, 15)
 
-    assert opportunity.created_at.tzinfo is None
-    assert opportunity.updated_at.tzinfo is None
+    assert opportunity.created_at_utc.tzinfo is None
+    assert opportunity.updated_at_utc.tzinfo is None
 
 
 def test_amount_is_parsed_as_decimal() -> None:
@@ -96,7 +96,7 @@ def test_invalid_or_timezone_naive_timestamp_is_rejected(
     timestamp: str,
 ) -> None:
     data = valid_opportunity_data()
-    data["created_at"] = timestamp
+    data["created_at_utc"] = timestamp
 
     with pytest.raises(ValidationError):
         Opportunity.model_validate(data)

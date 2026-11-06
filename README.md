@@ -1,13 +1,211 @@
-make config   # Validate compose.yaml
-make init     # Initialize Airflow
-make up       # Start services
-make ps       # Check container status
-make start    # Run all four steps in sequence
-make verify   # Alias for start
-make down     # Stop containers, preserve data
-make logs     # Follow logs
+# GTM Analytics
 
-docker compose config
-docker compose up airflow-init
-docker compose up -d
-docker compose ps
+GTM Analytics is a small data platform for exploring a practical go-to-market question: **which accounts are showing increased product usage while their sales opportunities are stalled, and which should the GTM team follow up with?**
+
+The project demonstrates an end-to-end data engineering workflow, from deterministic synthetic data generation through validation, object storage, and relational database loading.
+
+The platform currently provides:
+
+- **Validated data contracts** for accounts, opportunities, opportunity snapshots, and product or GTM activities.
+- **Deterministic synthetic data generation** designed to exercise varied GTM scenarios.
+- **Manifest-driven datasets** with record counts and checksums for validating published data.
+- **MinIO object storage** for published JSON Lines datasets and manifests.
+- **PostgreSQL ingestion** with batch identifiers and ingestion timestamps for data lineage.
+- **Batch audit and reconciliation** to track load status, record counts, and consistency between audit metadata and stored records.
+- **A local development environment** using Docker Compose, Airflow, PostgreSQL, and MinIO.
+
+The loader verifies published batches before inserting their records into PostgreSQL. It also checks completed batches before loading, allowing a verified completed batch to be rerun without inserting its records again.
+
+The generated data and scenario assumptions are described in [docs/business_scenarios.md](docs/business_scenarios.md) and [docs/dataset_shape.md](docs/dataset_shape.md). Field definitions are documented in the [data dictionary](docs/data_dict.md).
+
+## Quick start
+
+Prerequisites:
+
+- Docker with the Compose plugin.
+- Python 3.12 or newer and [`uv`](https://docs.astral.sh/uv/getting-started/installation/).
+- [GNU Make](https://www.gnu.org/software/make/).
+
+On Windows, native PowerShell and Command Prompt are not verified; the Makefile
+uses POSIX shell syntax. Use [WSL 2](https://learn.microsoft.com/windows/wsl/install)
+and run the commands below from its Linux terminal. Install `uv` and GNU Make
+inside your WSL distribution. For Docker, install
+[Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+and enable its [WSL 2 integration](https://docs.docker.com/desktop/features/wsl/)
+for that distribution.
+
+From the repository root, run:
+
+```sh
+cp .env.example .env
+uv sync --dev
+make start
+make publish-baseline
+make analytics-db-migrate
+make load-dataset
+```
+
+The `.env.example` values are local demo defaults; do not use them in production.
+These commands start the local services, generate, upload, and validate the
+`baseline_v2` synthetic batch in MinIO, apply Alembic migrations to create the
+analytics PostgreSQL schema, and load the batch records into PostgreSQL.
+
+Published MinIO batch prefixes are immutable and are not overwritten. If
+`baseline_v2` has already been published, load that existing batch with
+`make load-dataset BATCH_ID=baseline_v2`, or publish and load a new batch using
+the same new ID for both commands:
+
+```sh
+make publish-baseline BATCH_ID=baseline_v3
+make load-dataset BATCH_ID=baseline_v3
+```
+
+Loading a successfully completed batch again with the same ID is idempotent:
+the loader verifies the manifest, audit record, and stored row counts, then
+returns the counts without inserting duplicate rows. A different batch ID is
+treated as a new batch, not as permission to append: the current loader only
+loads into empty target tables and rejects a new batch if any target table
+already contains rows.
+
+### Clean up the environment
+
+Stop and remove the containers while keeping the stored MinIO and PostgreSQL
+data:
+
+```sh
+make down
+```
+
+To also delete the persistent data volumes and fully reset the sandbox, run:
+
+```sh
+make down-volumes
+```
+
+`make down-volumes` permanently deletes the data stored in the Compose volumes.
+
+## Architecture
+
+The current workflow separates dataset generation, raw storage, and relational ingestion:
+
+1. **Generate:** Create deterministic synthetic GTM datasets using defined business scenarios.
+2. **Validate and publish:** Validate the datasets, generate a manifest, and publish the JSON Lines files and manifest to MinIO.
+3. **Load:** Verify the published manifest and dataset contents, validate records against the data contracts, and load the data into PostgreSQL.
+4. **Audit and reconcile:** Record batch status and counts, and verify that the completed batch agrees with the stored records.
+
+MinIO preserves the published batch as the source for ingestion, while PostgreSQL provides relational tables for downstream analytics. Batch identifiers and ingestion timestamps support lineage and reconciliation.
+
+## Start the local environment
+
+You need Docker with the Compose plugin and `make`. From the repository root, run:
+
+```sh
+make start
+```
+
+This validates the Compose configuration, initializes Airflow's metadata database, and starts the services in the background. The first run may take a few minutes while Docker downloads the service images.
+
+Check service status with:
+
+```sh
+make ps
+```
+
+Once the services are running:
+
+- Airflow UI: [http://localhost:8080](http://localhost:8080)
+- MinIO console: [http://localhost:9001](http://localhost:9001)
+- MinIO API: [http://localhost:9000](http://localhost:9000)
+- Analytics PostgreSQL: `localhost:5433`
+
+Airflow authentication and service credentials are configured through environment variables; Compose provides local development defaults.
+
+Stop the services WITHOUT REMOVING their stored data with:
+
+```sh
+make down
+```
+
+Stop the services AND REMOVE their stored data with:
+
+```sh
+make down-volumnes
+```
+
+## Generate and publish a synthetic data batch
+
+Start the local environment with `make start` and install the Python dependencies with `uv sync --dev`.
+
+Generate, upload, and validate a batch in MinIO:
+
+```sh
+make publish-baseline
+```
+
+By default, the command publishes batch `baseline_v2` to the `gtm-raw` bucket. Choose a new batch ID for each run because existing batches are not overwritten:
+
+```sh
+make publish-baseline BATCH_ID=baseline_v3
+```
+
+The command prints the validation result and published manifest. The uploaded JSON Lines datasets and manifest are stored under:
+
+```text
+synthetic/batch_id=<batch-id>/
+```
+
+The manifest provides dataset metadata used to verify the published files and expected record counts during ingestion.
+
+## Load and audit a batch
+
+The ingestion workflow reads the published batch from MinIO, verifies its manifest and dataset contents, validates the records, and loads them into PostgreSQL.
+
+Run the loader after publishing the batch and applying the database migrations:
+
+```sh
+make load-dataset
+```
+
+By default, this loads `baseline_v2`. To load a different published batch, pass
+the same batch ID used when publishing:
+
+```sh
+make load-dataset BATCH_ID=baseline_v3
+```
+
+Each loaded record carries its source `batch_id` and `ingested_at_utc` timestamp. A separate batch audit record tracks the source prefix, manifest checksum, processing status, and per-dataset record counts.
+
+For a completed batch, the loader verifies that the manifest, audit metadata, and database row counts agree. If they do, a rerun returns the existing counts without inserting the batch again. If the source manifest or stored data does not match the completed audit record, the loader raises an error rather than silently reloading the batch.
+
+The current loader is designed for the initial load into empty target tables, with safe reruns of a previously completed batch. It is not yet a general-purpose incremental loader for adding arbitrary new batches to populated tables.
+
+## Python development
+
+Python 3.12 or newer and [uv](https://docs.astral.sh/uv/) are required for the Python package and development commands.
+
+### Database schema changes
+
+After changing the SQLAlchemy models, generate a migration with a descriptive
+message:
+
+```sh
+make analytics-db-update MIGRATION_MESSAGE="add account segment"
+```
+
+This starts and checks the analytics database, applies existing migrations,
+then generates a candidate migration in `alembic/versions/`. Review the
+generated migration before applying it:
+
+```sh
+make analytics-db-apply
+```
+
+### Tests and linting
+
+Install the project and development dependencies, then run the tests and linter:
+
+```sh
+uv sync --dev
+uv run pytest
+uv run ruff check .
+```
