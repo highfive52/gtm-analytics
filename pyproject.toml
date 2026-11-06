@@ -14,6 +14,12 @@ dependencies = [
     "sqlalchemy>=2.1.6",
 ]
 
+[project.optional-dependencies]
+dashboard = [
+    "pandas>=2.2,<3",
+    "streamlit>=1.45,<2",
+]
+
 [build-system]
 requires = ["uv_build>=0.11.14,<0.12.0"]
 build-backend = "uv_build"

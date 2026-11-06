@@ -1,4 +1,4 @@
-.PHONY: config init up ps start verify down logs test lint lint-fix check fix publish-baseline load-dataset dbt-debug dbt-snapshot dbt-build analytics-db analytics-db-check analytics-db-migrate analytics-db-update analytics-db-apply analytics-db-require-message
+.PHONY: config init up ps start verify down logs test lint lint-fix check fix publish-baseline load-dataset dbt-debug dbt-snapshot dbt-build streamlit analytics-db analytics-db-check analytics-db-migrate analytics-db-update analytics-db-apply analytics-db-require-message
 
 # Validate the Compose configuration
 config:
@@ -112,3 +112,7 @@ dbt-snapshot: analytics-db-migrate
 dbt-build: analytics-db-migrate
 	set -a; if [ -f .env ]; then . ./.env; fi; set +a; \
 	uv run dbt build --project-dir dbt --profiles-dir dbt
+
+# Run the Streamlit dashboard for the mart models
+streamlit: analytics-db analytics-db-check
+	uv run --extra dashboard streamlit run streamlit/app.py

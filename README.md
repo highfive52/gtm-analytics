@@ -13,6 +13,7 @@ The platform currently provides:
 - **PostgreSQL ingestion** with batch identifiers and ingestion timestamps for data lineage.
 - **Batch audit and reconciliation** to track load status, record counts, and consistency between audit metadata and stored records.
 - **dbt snapshots** that preserve observed versions of the raw tables in a `src` schema.
+- **A Streamlit dashboard** for visualizing weekly account usage and follow-up priority.
 - **A local development environment** using Docker Compose, Airflow, PostgreSQL, and MinIO.
 
 The loader verifies published batches before inserting their records into PostgreSQL. It also checks completed batches before loading, allowing a verified completed batch to be rerun without inserting its records again.
@@ -39,20 +40,25 @@ From the repository root, run:
 
 ```sh
 cp .env.example .env
-uv sync --dev
+uv sync --dev --extra dashboard
 make start
 make publish-baseline
 make analytics-db-migrate
 make load-dataset
 make dbt-build
+make streamlit
 ```
 
 The `.env.example` values are local demo defaults; do not use them in production.
 These commands start the local services, generate, upload, and validate the
 `baseline_v2` synthetic batch in MinIO, apply Alembic migrations to create the
 analytics PostgreSQL schema, and load the batch records into PostgreSQL.
-The final command runs dbt snapshots against the loaded raw tables, builds the
-warehouse models, and runs their data tests.
+`make dbt-build` runs dbt snapshots against the loaded raw tables, builds the
+warehouse and mart models, and runs their data tests. `make streamlit` starts
+the read-only dashboard at <http://localhost:8501>; it visualizes the two
+tables in the PostgreSQL `mart` schema and refreshes cached data every 60
+seconds. Run `make dbt-build` before opening the dashboard to create or update
+those tables.
 
 Published MinIO batch prefixes are immutable and are not overwritten. If
 `baseline_v2` has already been published, load that existing batch with
@@ -98,6 +104,7 @@ The current workflow separates dataset generation, raw storage, relational inges
 4. **Snapshot:** Use dbt to preserve source versions observed at each snapshot run in the `src` schema.
 5. **Model:** Build dimensions and facts in the `wh` schema, then reporting marts in the `mart` schema.
 6. **Audit and reconcile:** Record batch status and counts, and verify that the completed batch agrees with the stored records.
+7. **Visualize:** Use the read-only Streamlit dashboard to explore the two reporting marts.
 
 MinIO preserves the published batch as the source for ingestion, while PostgreSQL provides relational tables for downstream analytics. Batch identifiers and ingestion timestamps support lineage and reconciliation.
 
